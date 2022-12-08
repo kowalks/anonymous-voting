@@ -93,3 +93,20 @@ Contract deployed!
 Candidate count: 0
 Voter count: 0
 ```
+
+## Voting scheme
+
+### Key managers
+
+For the anonymous voting scheme, we need to set two key managers to generate the first public key to our voting. They are supposed to deposit an amount of Ethers in the contract to make sure they reveal the secrets at Tally Phase. This incentivates the election to finish eventually.
+
+We need to set a name and a random key (0 for random generation, a real number for reproducibility). They announce `rA * G` and `rB * G` to the contract, and can compute `rA * rB * G`. Then, in the Tally Phase, they reveal `rA` and `rB`
+ so that the result can be computed. 
+ 
+```
+go run ./cmd/manager/main.go Alice 1
+```
+
+```
+go run ./cmd/manager/main.go Bob 2
+```

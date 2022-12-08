@@ -65,6 +65,12 @@ contract AnonymousVoting {
     function addCandidate (string memory name, uint x, uint y) public {
         require(phase == Phase.Setup);
 
+        // candidates should be unique
+        for (uint i=0; i < managerCount; i++) {
+            Point memory pubkey = candidates[i].pubkey;
+            require(pubkey.x != x || pubkey.y != y, "duplicate candidate");
+        }
+
         candidates[candidateCount] = Candidate(name, Point(x, y));
         candidateCount++;
     }
@@ -88,6 +94,7 @@ contract AnonymousVoting {
 
     function announcePublicKey(uint x, uint y) public {
         require(phase == Phase.Setup);
+        require(managerCount == 2);
 
         address payable owner = payable(msg.sender);
         

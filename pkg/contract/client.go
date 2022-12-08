@@ -52,6 +52,7 @@ func Auth(clientAddress string) (*bind.TransactOpts, *ethclient.Client) {
 	}
 
 	fmt.Println("Connected to Ganache")
+	fmt.Println()
 
 	privateKey, err := crypto.HexToECDSA(clientAddress)
 	if err != nil {
@@ -103,6 +104,8 @@ func ConnectionCLI() (*bind.TransactOpts, *ethclient.Client, *Contract) {
 	fmt.Print("  contract: ")
 	var contract string
 	fmt.Scan(&contract)
+
+	fmt.Println()
 
 	auth, client := Auth(address)
 	instance := Connect(contract)

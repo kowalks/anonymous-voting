@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
 	"math/big"
 	"os"
@@ -25,6 +24,9 @@ func requestInfo(name string, rnd, rGx, rGy *big.Int) (*big.Int, *big.Int) {
 	x, _ = x.SetString(xStr, 10)
 	y := new(big.Int)
 	y, _ = y.SetString(yStr, 10)
+
+	fmt.Println()
+
 	return x, y
 }
 
@@ -36,32 +38,28 @@ func main() {
 
 	// Generating random number for Key Manager
 	name := os.Args[1]
-	rnd := new(big.Int)
-	rnd, ok := rnd.SetString(os.Args[2], 10)
-	if !ok {
-		panic("Error in converting number to big.Int")
-	}
-
-	if len(rnd.Bytes()) == 0 {
-		order := math.EllipticCurve.Params().N
-		rnd, _ = rand.Int(rand.Reader, order)
-	}
+	rnd := math.GenerateRand(os.Args[2])
 
 	// Connecting to blockchain
 	auth, client, instance := contract.ConnectionCLI()
 
-	// Generating pubkey
+	// Generating pubkey and registering manager
 	rGx, rGy := math.EllipticCurve.ScalarBaseMult(rnd.Bytes())
-
-	// Announcing pubkey
-	tx, _ := instance.AnnouncePublicKey(auth, rGx, rGy)
-	fmt.Println("Announced pubkey with tx", tx.Hash())
+	tx, err := instance.RegisterManager(auth, rGx, rGy)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println("Registered manager with tx", tx.Hash())
+	fmt.Println()
 
 	math.PrintCurve(math.EllipticCurve)
 	x, y := requestInfo(name, rnd, rGx, rGy)
-
 	rrGx, rrGy := math.EllipticCurve.ScalarMult(x, y, rnd.Bytes())
-	fmt.Println("  rrG =", rrGx, rrGy)
+	fmt.Println("Public Key rrG =", rrGx, rrGy)
+
+	// Announcing first pubkey for the election
+	instance.AnnouncePublicKey(auth, rrGx, rrGy)
 
 	_ = client
 }
