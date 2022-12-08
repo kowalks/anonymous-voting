@@ -14,5 +14,6 @@
 # Binaries
 bin/
 
-# Dependency directories (remove the comment below to include it)
+# Dependency directories
 vendor/
+node_modules/

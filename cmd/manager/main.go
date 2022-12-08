@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 
+	"github.com/kowalks/anonymous-voting/pkg/contract"
 	"github.com/kowalks/anonymous-voting/pkg/math"
 )
 
@@ -33,6 +34,7 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Generating random number for Key Manager
 	name := os.Args[1]
 	rnd := new(big.Int)
 	rnd, ok := rnd.SetString(os.Args[2], 10)
@@ -45,11 +47,21 @@ func main() {
 		rnd, _ = rand.Int(rand.Reader, order)
 	}
 
+	// Connecting to blockchain
+	auth, client, instance := contract.ConnectionCLI()
+
+	// Generating pubkey
 	rGx, rGy := math.EllipticCurve.ScalarBaseMult(rnd.Bytes())
+
+	// Announcing pubkey
+	tx, _ := instance.AnnouncePublicKey(auth, rGx, rGy)
+	fmt.Println("Announced pubkey with tx", tx.Hash())
 
 	math.PrintCurve(math.EllipticCurve)
 	x, y := requestInfo(name, rnd, rGx, rGy)
 
 	rrGx, rrGy := math.EllipticCurve.ScalarMult(x, y, rnd.Bytes())
 	fmt.Println("  rrG =", rrGx, rrGy)
+
+	_ = client
 }
