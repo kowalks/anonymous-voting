@@ -14,7 +14,8 @@ struct Candidate {
 
 // Voter model: ea
 struct Voter {
-    Point pubkey;
+    Point P;
+    Point I;
 }
 
 // Key Manager model
@@ -62,11 +63,11 @@ contract AnonymousVoting {
     uint public ballotCount = 0;
     uint public managerCount = 0;
 
-    function addCandidate (string memory name, uint x, uint y) public {
+    function addCandidate(string memory name, uint x, uint y) public {
         require(phase == Phase.Setup);
 
         // candidates should be unique
-        for (uint i=0; i < managerCount; i++) {
+        for (uint i=0; i < candidateCount; i++) {
             Point memory pubkey = candidates[i].pubkey;
             require(pubkey.x != x || pubkey.y != y, "duplicate candidate");
         }
@@ -75,10 +76,16 @@ contract AnonymousVoting {
         candidateCount++;
     }
 
-    function addVoter (uint x, uint y) public {
+    function addVoter (uint Px, uint Py, uint Ix, uint Iy) public {
         require(phase == Phase.Setup);
 
-        voters[voterCount] = Voter(Point(x, y));
+        // voters should be unique
+        for (uint i=0; i < voterCount; i++) {
+            Point memory pubkey = voters[i].P;
+            require(pubkey.x != Px || pubkey.y != Py, "duplicate voter");
+        }
+
+        voters[voterCount] = Voter(Point(Px, Py), Point(Ix, Iy));
         voterCount++;
     }
 
@@ -93,7 +100,6 @@ contract AnonymousVoting {
     }
 
     function announcePublicKey(uint x, uint y) public {
-        require(phase == Phase.Setup);
         require(managerCount == 2);
 
         address payable owner = payable(msg.sender);
@@ -101,17 +107,19 @@ contract AnonymousVoting {
         for (uint i=0; i < managerCount; i++) {
             if (managers[i].owner == owner) {
                 managers[i].announcedKey.x = x;
-                managers[i].announcedKey.x = y;
+                managers[i].announcedKey.y = y;
             }
         }
+
+        phase = Phase.Vote;
     }
 
-    function getPublicKey() public returns (uint, uint) {
+    function getKey() public returns (uint, uint) {
         uint x = managers[0].announcedKey.x;
         uint y = managers[0].announcedKey.y;
         for (uint i=0; i < managerCount; i++) {
-            require(managers[i].announcedKey.x != x, "divergent announcement");
-            require(managers[i].announcedKey.y != y, "divergent announcement");
+            require(managers[i].announcedKey.x == x, "divergent announcement");
+            require(managers[i].announcedKey.y == y, "divergent announcement");
         }
 
         phase = Phase.Vote;
@@ -127,10 +135,15 @@ contract AnonymousVoting {
 
         ballots[ballotCount] = Ballot(SA, R, signature);
         ballotCount++;
+
+        if (ballotCount == voterCount) {
+            phase = Phase.Tally;
+        }
     }
 
     function revealPublicKey(uint r) public {
         require(ballotCount == voterCount, "missing ballots");
+        require(phase == Phase.Tally, "not tally phase");
         
         phase = Phase.Tally;
 

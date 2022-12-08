@@ -19,7 +19,7 @@ func main() {
 	rnd := math.GenerateRand(os.Args[2])
 
 	// Connecting to blockchain
-	auth, client, instance := contract.ConnectionCLI()
+	auth, instance, _, _ := contract.ConnectionCLI()
 
 	// Generating pubkey and registering candidate
 	x, y := math.EllipticCurve.ScalarBaseMult(rnd.Bytes())
@@ -36,6 +36,4 @@ func main() {
 		os.Exit(1)
 	}
 	fmt.Println("Candidate count:", cnt)
-
-	_ = client
 }

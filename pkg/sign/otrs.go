@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"fmt"
 	"math/big"
 
 	"github.com/kowalks/anonymous-voting/pkg/math"
@@ -29,7 +30,7 @@ func GEN(curve elliptic.Curve) (ecdsa.PrivateKey, ecdsa.PublicKey) {
 	return *key, I
 }
 
-func SIG(message []byte, key ecdsa.PrivateKey, I ecdsa.PublicKey, pub []ecdsa.PublicKey, s int) (ecdsa.PublicKey, []*big.Int, []*big.Int) {
+func SIG(message []byte, key ecdsa.PrivateKey, I ecdsa.PublicKey, pub []ecdsa.PublicKey, s int) Signature {
 	if !EqualPub(pub[s], key.PublicKey) {
 		panic("Private key not in the public list")
 	}
@@ -97,10 +98,11 @@ func SIG(message []byte, key ecdsa.PrivateKey, I ecdsa.PublicKey, pub []ecdsa.Pu
 		}
 	}
 
-	return I, c, r
+	return Signature{I, c, r}
 }
 
-func VER(message []byte, pub []ecdsa.PublicKey, I ecdsa.PublicKey, c, r []*big.Int) bool {
+func VER(message []byte, pub []ecdsa.PublicKey, s Signature) bool {
+	I, c, r := s.I, s.C, s.R
 	curve := I.Curve
 	order := curve.Params().N
 	N := len(pub)
@@ -129,4 +131,27 @@ func VER(message []byte, pub []ecdsa.PublicKey, I ecdsa.PublicKey, c, r []*big.I
 
 	eq := challenge.Cmp(sum)
 	return eq == 0
+}
+
+func sign() {
+
+	N := 5
+	curve := math.EllipticCurve
+
+	key := make([]ecdsa.PrivateKey, N)
+	pub := make([]ecdsa.PublicKey, N)
+	img := make([]ecdsa.PublicKey, N)
+	for i := 0; i < N; i++ {
+		key[i], img[i] = GEN(curve)
+		pub[i] = key[i].PublicKey
+	}
+
+	m := []byte("Message")
+	for s := 0; s < N; s++ {
+
+		signature := SIG(m, key[s], img[s], pub, s)
+
+		ver := VER(m, pub, signature)
+		fmt.Println(ver)
+	}
 }

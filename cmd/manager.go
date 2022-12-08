@@ -30,6 +30,20 @@ func requestInfo(name string, rnd, rGx, rGy *big.Int) (*big.Int, *big.Int) {
 	return x, y
 }
 
+func revealSecret(instance *contract.Contract, address string, contractAddress string, r *big.Int) {
+	phase, _ := instance.Phase(nil)
+	for phase != 2 {
+		phase, _ = instance.Phase(nil)
+	}
+
+	auth, _ := contract.Auth(address)
+	instance = contract.Connect(contractAddress)
+	instance.RevealPublicKey(auth, r)
+
+	fmt.Println("Secret revealed!")
+	fmt.Println()
+}
+
 func main() {
 	if len(os.Args) != 3 {
 		fmt.Println("Provide a name and a rand int for this key manager")
@@ -41,7 +55,7 @@ func main() {
 	rnd := math.GenerateRand(os.Args[2])
 
 	// Connecting to blockchain
-	auth, client, instance := contract.ConnectionCLI()
+	auth, instance, address, cAddress := contract.ConnectionCLI()
 
 	// Generating pubkey and registering manager
 	rGx, rGy := math.EllipticCurve.ScalarBaseMult(rnd.Bytes())
@@ -59,7 +73,16 @@ func main() {
 	fmt.Println("Public Key rrG =", rrGx, rrGy)
 
 	// Announcing first pubkey for the election
-	instance.AnnouncePublicKey(auth, rrGx, rrGy)
+	auth, _ = contract.Auth(address)
+	instance = contract.Connect(cAddress)
+	_, err = instance.AnnouncePublicKey(auth, rrGx, rrGy)
+	if err != nil {
+		panic(err)
+	}
 
-	_ = client
+	fmt.Println("Annouced public key")
+	fmt.Println()
+
+	// Revealing pubkey after votation
+	revealSecret(instance, address, cAddress, rnd)
 }

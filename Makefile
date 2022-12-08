@@ -27,10 +27,10 @@ address: $(FXT)/*
 	 | awk -v q="'" '{print "sed -e "q"2s/.*/"$$1"/"q" -i "q q" $^"}' \
 	 | bash
 
-setup: setup-ganache address	
+setup: compile setup-ganache address	
 
-setup-ganache: teardown compile
-	ganache-cli -m "ces27" &
+setup-ganache: teardown
+	ganache-cli -m "ces27"  &
 	sleep 2
 	go run $(CMD)/$(DEPLOY).go cbed89197463cd2cfc71c2fe196989d844e56363269c11fc1b1fe510ed95f431 \
 	 | grep contract \
@@ -54,6 +54,22 @@ c2:
 
 c3:
 	go run $(CMD)/$(CANDIDATE).go Thomson 12 < $(FXT)/c3.txt
+
+v1: 
+	go run $(CMD)/$(VOTER).go Alpha
+
+v2: 
+	go run $(CMD)/$(VOTER).go Beta
+
+v3: 
+	go run $(CMD)/$(VOTER).go Gama
+
+v4: 
+	go run $(CMD)/$(VOTER).go Delta
+
+v5:
+	go run $(CMD)/$(VOTER).go Epsilon
+
 
 candidates: c1 c2 c3
 
