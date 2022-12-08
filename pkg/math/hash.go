@@ -16,7 +16,10 @@ func HashS(hash []byte) *big.Int {
 
 // a cryptographic hash function which maps finite field points on an elliptic curve to themselves
 func HashP(point ecdsa.PublicKey) ecdsa.PublicKey {
-	return point
+	curve := point.Curve
+	params := curve.Params()
+	x, y := curve.Add(point.X, point.Y, params.Gx, params.Gy)
+	return ecdsa.PublicKey{Curve: curve, X: x, Y: y}
 }
 
 // a cryptographic hash function which maps a binary sequence with arbitrary length to a point on an elliptic curve
