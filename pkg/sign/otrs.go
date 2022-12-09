@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"fmt"
 	"math/big"
 
 	"github.com/kowalks/anonymous-voting/pkg/math"
@@ -131,27 +130,4 @@ func VER(message []byte, pub []ecdsa.PublicKey, s Signature) bool {
 
 	eq := challenge.Cmp(sum)
 	return eq == 0
-}
-
-func sign() {
-
-	N := 5
-	curve := math.EllipticCurve
-
-	key := make([]ecdsa.PrivateKey, N)
-	pub := make([]ecdsa.PublicKey, N)
-	img := make([]ecdsa.PublicKey, N)
-	for i := 0; i < N; i++ {
-		key[i], img[i] = GEN(curve)
-		pub[i] = key[i].PublicKey
-	}
-
-	m := []byte("Message")
-	for s := 0; s < N; s++ {
-
-		signature := SIG(m, key[s], img[s], pub, s)
-
-		ver := VER(m, pub, signature)
-		fmt.Println(ver)
-	}
 }

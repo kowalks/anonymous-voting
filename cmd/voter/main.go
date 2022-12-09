@@ -2,8 +2,6 @@ package main
 
 import (
 	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -14,43 +12,6 @@ import (
 	"github.com/kowalks/anonymous-voting/pkg/math"
 	"github.com/kowalks/anonymous-voting/pkg/sign"
 )
-
-func GenerateSA(A, B *ecdsa.PublicKey) (ecdsa.PublicKey, ecdsa.PublicKey) {
-	curve := math.EllipticCurve
-	order := curve.Params().N
-
-	r, _ := rand.Int(rand.Reader, order)
-	xR, yR := curve.ScalarBaseMult(r.Bytes())
-	R := ecdsa.PublicKey{Curve: curve, X: xR, Y: yR}
-
-	xA, yA := curve.ScalarMult(A.X, A.Y, r.Bytes())
-
-	// SA = Hs(rA)G + B
-	H := elliptic.Marshal(curve, xA, yA)
-	xH, yH := curve.ScalarBaseMult(math.HashS(H).Bytes())
-	xP, yP := curve.Add(xH, yH, B.X, B.Y)
-	SA := ecdsa.PublicKey{Curve: curve, X: xP, Y: yP}
-
-	fmt.Println("generating (SA,R)", SA, R)
-
-	return SA, R
-}
-
-func VerifySA(A *ecdsa.PrivateKey, B, SA, R ecdsa.PublicKey) bool {
-	curve := math.EllipticCurve
-
-	// x = (Hs(aR) + b) * G
-	xA, yA := curve.ScalarMult(R.X, R.Y, A.D.Bytes())
-	H := math.HashS(elliptic.Marshal(curve, xA, yA))
-
-	HGx, HGy := curve.ScalarBaseMult(H.Bytes())
-	xX, yX := curve.Add(HGx, HGy, B.X, B.Y)
-	X := ecdsa.PublicKey{Curve: curve, X: xX, Y: yX}
-
-	fmt.Println("Verifying (A,B,SA,R)", *A, B, SA, R)
-
-	return sign.EqualPub(X, SA)
-}
 
 func requestVote(instance *contract.Contract, address string, contractAddress string) (sign.Candidate, []sign.Candidate) {
 	fmt.Println("Waiting for election to start")
@@ -70,7 +31,7 @@ func requestVote(instance *contract.Contract, address string, contractAddress st
 		x := candidate.Pubkey.X
 		y := candidate.Pubkey.Y
 
-		candidates = append(candidates, sign.Candidate{name, &ecdsa.PublicKey{math.EllipticCurve, x, y}})
+		candidates = append(candidates, sign.Candidate{Name: name, Pubkey: &ecdsa.PublicKey{Curve: math.EllipticCurve, X: x, Y: y}})
 	}
 
 	fmt.Println("Candidate list")
@@ -102,9 +63,9 @@ func retriveParams(instance *contract.Contract, priv ecdsa.PrivateKey) ([]sign.V
 	s := 0
 	for i := big.NewInt(0); cnt.Cmp(i) == 1; i.Add(i, big.NewInt(1)) {
 		voter, _ := instance.Voters(nil, i)
-		PP := ecdsa.PublicKey{curve, voter.P.X, voter.P.Y}
-		II := ecdsa.PublicKey{curve, voter.I.X, voter.I.Y}
-		voters = append(voters, sign.Voter{&PP, &II})
+		PP := ecdsa.PublicKey{Curve: curve, X: voter.P.X, Y: voter.P.Y}
+		II := ecdsa.PublicKey{Curve: curve, X: voter.I.X, Y: voter.I.Y}
+		voters = append(voters, sign.Voter{P: &PP, I: &II})
 		P = append(P, PP)
 		I = append(I, II)
 
@@ -125,23 +86,20 @@ func retriveBallots(instance *contract.Contract) ([]sign.Ballot, *ecdsa.PrivateK
 
 	for i := big.NewInt(0); cnt.Cmp(i) == 1; i.Add(i, big.NewInt(1)) {
 		ballot, _ := instance.Ballots(nil, i)
-		SA := ecdsa.PublicKey{curve, ballot.SA.X, ballot.SA.Y}
-		R := ecdsa.PublicKey{curve, ballot.R.X, ballot.R.Y}
-		ballots = append(ballots, sign.Ballot{SA, R, ballot.Signature})
+		SA := ecdsa.PublicKey{Curve: curve, X: ballot.SA.X, Y: ballot.SA.Y}
+		R := ecdsa.PublicKey{Curve: curve, X: ballot.R.X, Y: ballot.R.Y}
+		ballots = append(ballots, sign.Ballot{SA: SA, R: R, Signature: ballot.Signature})
 	}
 
 	m1, _ := instance.Managers(nil, big.NewInt(0))
 	m2, _ := instance.Managers(nil, big.NewInt(1))
 
-	fmt.Println("m1", m1)
-	fmt.Println("m2", m2)
-
 	m := big.NewInt(1)
 	m = m.Mul(m1.PrivateKey, m2.PrivateKey)
 	mX, mY := curve.ScalarBaseMult(m.Bytes())
 
-	pubkey := ecdsa.PublicKey{curve, mX, mY}
-	A := ecdsa.PrivateKey{pubkey, m}
+	pubkey := ecdsa.PublicKey{Curve: curve, X: mX, Y: mY}
+	A := ecdsa.PrivateKey{PublicKey: pubkey, D: m}
 
 	return ballots, &A
 }
@@ -155,24 +113,15 @@ func tallyElection(instance *contract.Contract, contractAddress string, candidat
 	instance = contract.Connect(contractAddress)
 	ballots, A := retriveBallots(instance)
 
-	fmt.Println("ballots", ballots)
-	fmt.Println("A", A)
-
 	// Tally results
 	votes := make([]int, len(candidates))
 	for i := 0; i < len(ballots); i++ {
 		ballot := ballots[i]
 
 		for j := 0; j < len(candidates); j++ {
-			message := fmt.Sprintf("(%v,%v)", ballot.SA, ballot.R)
-			stringSignature := sign.StringSignature{}
-			fmt.Println("ballot sig", ballot.Signature)
+			message, signature := sign.BuildAssets(ballot)
 
-			json.Unmarshal([]byte(ballot.Signature), &stringSignature)
-			signature := stringSignature.ToSignature()
-			fmt.Println("signature", signature)
-
-			validitySA := VerifySA(A, *candidates[j].Pubkey, ballot.SA, ballot.R)
+			validitySA := sign.VerifySA(A, *candidates[j].Pubkey, ballot.SA, ballot.R)
 			validitySignature := sign.VER([]byte(message), P, signature)
 
 			if validitySA && validitySignature {
@@ -227,14 +176,15 @@ func main() {
 	// Algorithm to vote
 	_, Pvec, _, s := retriveParams(instance, P)
 
-	A := &ecdsa.PublicKey{math.EllipticCurve, Ax, Ay}
+	A := &ecdsa.PublicKey{Curve: math.EllipticCurve, X: Ax, Y: Ay}
 	B := candidate.Pubkey
-	SA, R := GenerateSA(A, B)
+	SA, R := sign.GenerateSA(A, B)
 
-	message := fmt.Sprintf("(%v,%v)", SA, R)
+	message := fmt.Sprintf("(%v,%v,%v,%v)", SA.X, SA.Y, R.X, R.Y)
 	signature := sign.SIG([]byte(message), P, I, Pvec, s)
 	signatureString := signature.ToStringSignature()
-	str := fmt.Sprintf("%v", signatureString)
+	byteStr, _ := json.Marshal(signatureString)
+	str := string(byteStr)
 
 	// Transmit to blockchain
 	auth, _ = contract.Auth(address)

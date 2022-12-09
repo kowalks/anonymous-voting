@@ -6,7 +6,6 @@ FXT:=./fixtures
 
 MANAGER:=manager
 CANDIDATE:=candidate
-SIGNER:=signer
 VOTER:=voter
 DEPLOY:=deployer
 
@@ -32,7 +31,7 @@ setup: compile setup-ganache address
 setup-ganache: teardown
 	ganache-cli -m "ces27"  &
 	sleep 2
-	go run $(CMD)/$(DEPLOY).go cbed89197463cd2cfc71c2fe196989d844e56363269c11fc1b1fe510ed95f431 \
+	go run $(CMD)/$(DEPLOY)/main.go cbed89197463cd2cfc71c2fe196989d844e56363269c11fc1b1fe510ed95f431 \
 	 | grep contract \
 	 | awk '{print $$3}' \
 	 | cut -c3- > $(BIN)/address.txt
@@ -43,19 +42,19 @@ teardown:
 candidates: c1 c2 c3
 
 alice:
-	go run $(CMD)/$(MANAGER).go Alice 1
+	go run $(CMD)/$(MANAGER)/main.go Alice 1
 
 bob:
-	go run $(CMD)/$(MANAGER).go Bob 2
+	go run $(CMD)/$(MANAGER)/main.go Bob 2
 
 c1:
-	go run $(CMD)/$(CANDIDATE).go Einstein 10 < $(FXT)/c1.txt
+	go run $(CMD)/$(CANDIDATE)/main.go Einstein 10 < $(FXT)/c1.txt
 
 c2:
-	go run $(CMD)/$(CANDIDATE).go Rutherford 11 < $(FXT)/c2.txt
+	go run $(CMD)/$(CANDIDATE)/main.go Rutherford 11 < $(FXT)/c2.txt
 
 c3:
-	go run $(CMD)/$(CANDIDATE).go Thomson 12 < $(FXT)/c3.txt
+	go run $(CMD)/$(CANDIDATE)/main.go Thomson 12 < $(FXT)/c3.txt
 
 voter:
-	go run $(CMD)/$(VOTER).go
+	go run $(CMD)/$(VOTER)/main.go
