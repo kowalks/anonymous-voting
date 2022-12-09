@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
@@ -30,6 +31,8 @@ func GenerateSA(A, B *ecdsa.PublicKey) (ecdsa.PublicKey, ecdsa.PublicKey) {
 	xP, yP := curve.Add(xH, yH, B.X, B.Y)
 	SA := ecdsa.PublicKey{Curve: curve, X: xP, Y: yP}
 
+	fmt.Println("generating (SA,R)", SA, R)
+
 	return SA, R
 }
 
@@ -43,6 +46,8 @@ func VerifySA(A *ecdsa.PrivateKey, B, SA, R ecdsa.PublicKey) bool {
 	HGx, HGy := curve.ScalarBaseMult(H.Bytes())
 	xX, yX := curve.Add(HGx, HGy, B.X, B.Y)
 	X := ecdsa.PublicKey{Curve: curve, X: xX, Y: yX}
+
+	fmt.Println("Verifying (A,B,SA,R)", *A, B, SA, R)
 
 	return sign.EqualPub(X, SA)
 }
@@ -125,14 +130,23 @@ func retriveBallots(instance *contract.Contract) ([]sign.Ballot, *ecdsa.PrivateK
 		ballots = append(ballots, sign.Ballot{SA, R, ballot.Signature})
 	}
 
-	manager, _ := instance.Managers(nil, big.NewInt(0))
-	pubkey := ecdsa.PublicKey{curve, manager.Pubkey.X, manager.Pubkey.Y}
-	A := ecdsa.PrivateKey{pubkey, manager.PrivateKey}
+	m1, _ := instance.Managers(nil, big.NewInt(0))
+	m2, _ := instance.Managers(nil, big.NewInt(1))
+
+	fmt.Println("m1", m1)
+	fmt.Println("m2", m2)
+
+	m := big.NewInt(1)
+	m = m.Mul(m1.PrivateKey, m2.PrivateKey)
+	mX, mY := curve.ScalarBaseMult(m.Bytes())
+
+	pubkey := ecdsa.PublicKey{curve, mX, mY}
+	A := ecdsa.PrivateKey{pubkey, m}
 
 	return ballots, &A
 }
 
-func tallyElection(instance *contract.Contract, contractAddress string, candidates []sign.Candidate) {
+func tallyElection(instance *contract.Contract, contractAddress string, candidates []sign.Candidate, P []ecdsa.PublicKey) {
 	phase, _ := instance.Phase(nil)
 	for phase != 2 {
 		phase, _ = instance.Phase(nil)
@@ -141,13 +155,27 @@ func tallyElection(instance *contract.Contract, contractAddress string, candidat
 	instance = contract.Connect(contractAddress)
 	ballots, A := retriveBallots(instance)
 
+	fmt.Println("ballots", ballots)
+	fmt.Println("A", A)
+
 	// Tally results
 	votes := make([]int, len(candidates))
 	for i := 0; i < len(ballots); i++ {
 		ballot := ballots[i]
 
 		for j := 0; j < len(candidates); j++ {
-			if VerifySA(A, *candidates[i].Pubkey, ballot.SA, ballot.R) {
+			message := fmt.Sprintf("(%v,%v)", ballot.SA, ballot.R)
+			stringSignature := sign.StringSignature{}
+			fmt.Println("ballot sig", ballot.Signature)
+
+			json.Unmarshal([]byte(ballot.Signature), &stringSignature)
+			signature := stringSignature.ToSignature()
+			fmt.Println("signature", signature)
+
+			validitySA := VerifySA(A, *candidates[j].Pubkey, ballot.SA, ballot.R)
+			validitySignature := sign.VER([]byte(message), P, signature)
+
+			if validitySA && validitySignature {
 				votes[j] = votes[j] + 1
 			}
 		}
@@ -156,20 +184,12 @@ func tallyElection(instance *contract.Contract, contractAddress string, candidat
 	fmt.Println()
 	fmt.Println("Final results")
 	for i := 0; i < len(candidates); i++ {
-		fmt.Println(" (%v) %v: %v votes", i, candidates[i].Name, votes[i])
+		fmt.Printf(" (%v) %v: %v votes\n", i, candidates[i].Name, votes[i])
 	}
 
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Provide a name for this key voter")
-		os.Exit(0)
-	}
-
-	// Generating random number for voter
-	name := os.Args[1]
-
 	// Connecting to blockchain
 	auth, instance, address, contractAddress := contract.ConnectionCLI()
 
@@ -213,24 +233,17 @@ func main() {
 
 	message := fmt.Sprintf("(%v,%v)", SA, R)
 	signature := sign.SIG([]byte(message), P, I, Pvec, s)
-	signatureString := fmt.Sprintf("%v", signature)
+	signatureString := signature.ToStringSignature()
+	str := fmt.Sprintf("%v", signatureString)
 
 	// Transmit to blockchain
 	auth, _ = contract.Auth(address)
 	instance = contract.Connect(contractAddress)
-	_, err = instance.Vote(auth, SA.X, SA.Y, R.X, R.Y, signatureString)
+	_, err = instance.Vote(auth, SA.X, SA.Y, R.X, R.Y, str)
 	if err != nil {
 		panic(err)
 	}
 
 	// Audit results
-	tallyElection(instance, contractAddress, candidates)
-
-	// ver := VerifySA(A, B, SA, R)
-	// fmt.Println(ver)
-
-	// fmt.Println(math.EllipticCurve.Params())
-	// fmt.Println(math.EllipticCurve.Params().P)
-
-	_ = name
+	tallyElection(instance, contractAddress, candidates, Pvec)
 }

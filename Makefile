@@ -40,6 +40,8 @@ setup-ganache: teardown
 teardown:
 	pgrep -f ganache-cli | xargs kill
 
+candidates: c1 c2 c3
+
 alice:
 	go run $(CMD)/$(MANAGER).go Alice 1
 
@@ -54,27 +56,6 @@ c2:
 
 c3:
 	go run $(CMD)/$(CANDIDATE).go Thomson 12 < $(FXT)/c3.txt
-
-v1: 
-	go run $(CMD)/$(VOTER).go Alpha
-
-v2: 
-	go run $(CMD)/$(VOTER).go Beta
-
-v3: 
-	go run $(CMD)/$(VOTER).go Gama
-
-v4: 
-	go run $(CMD)/$(VOTER).go Delta
-
-v5:
-	go run $(CMD)/$(VOTER).go Epsilon
-
-
-candidates: c1 c2 c3
-
-signer:
-	go run $(CMD)/$(SIGNER).go
 
 voter:
 	go run $(CMD)/$(VOTER).go
